@@ -450,14 +450,14 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
   [...head, ...optChars.flat(), ...optVals].forEach(scatter);
   head.forEach(el => { el._p = 1; });
   [...optChars.flat(), ...optVals].forEach(el => { el._p = 0; paint(el, 0); });
-  let open = false;
+  let open = false, viaKey = false;
   const setOpen = o => {
     if (o === open) return; open = o;
     h.setAttribute('aria-expanded', o); hint.hidden = o; back.hidden = !o; fin.classList.toggle('is-open', o);
     if (RM) {
       h.classList.toggle('gone', o); opts.toggleAttribute('data-off', !o);
       [...head, ...optChars.flat(), ...optVals].forEach(el => { el.style.cssText = ''; });
-      if (o) opts.querySelector('.opt').focus(); else h.focus();
+      if (viaKey) { if (o) opts.querySelector('.opt').focus(); else h.focus(); }
       return;
     }
     const outs = o ? head : [...optChars.flat(), ...optVals];
@@ -470,20 +470,20 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
       ins.forEach(scatter);
       ins.forEach((el, i) => go(el, 1, 260 + i * 22, 150, 13));
       optVals.forEach((el, i) => go(el, 1, 620 + i * 90, 170, 18));
-      setTimeout(() => { if (open) opts.querySelector('.opt').focus({ preventScroll: true }); }, 400);
+      if (viaKey) setTimeout(() => { if (open) opts.querySelector('.opt').focus({ preventScroll: true }); }, 400);
     } else {
       h.classList.remove('gone');
       setTimeout(() => { if (!open) opts.setAttribute('data-off', ''); }, 900);
       ins.forEach(scatter);
       ins.forEach((el, i) => go(el, 1, 220 + i * 14, 150, 13));
-      h.focus({ preventScroll: true });
+      if (viaKey) h.focus({ preventScroll: true });
     }
   };
   // the whole closing screen is the click target, not only the headline
-  fin.addEventListener('click', e => { if (!open && !e.target.closest('.reach-back, .reach-opts')) setOpen(true); });
-  h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } });
-  back.addEventListener('click', () => setOpen(false));
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) setOpen(false); });
+  fin.addEventListener('click', e => { if (!open && !e.target.closest('.reach-back, .reach-opts')) { viaKey = false; setOpen(true); } });
+  h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viaKey = true; setOpen(true); } });
+  back.addEventListener('click', e => { viaKey = e.detail === 0; setOpen(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) { viaKey = true; setOpen(false); } });
   const mail = opts.querySelector('[data-email]'), mailV = mail.querySelector('.opt-v');
   mail.addEventListener('click', () => {
     const v = mail.dataset.email, done = t => { mailV.textContent = t; setTimeout(() => { mailV.textContent = v; }, 1800); };
