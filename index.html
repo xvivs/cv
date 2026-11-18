@@ -204,7 +204,7 @@ h1 { font-size: var(--t-xl); line-height: .98; letter-spacing: -0.035em; text-wr
 /* finale: the headline is the control; its letters scatter like the stars and regroup as three contact lines */
 .finale-in { display: grid; justify-items: center; gap: 28px; }
 .reach-h, .reach-opts { grid-area: 1 / 1; align-self: center; }
-.finale:not(.is-open) { cursor: pointer; }
+.finale { cursor: pointer; }
 .reach-h { border-radius: 12px; }
 .finale:not(.is-open):hover .reach-h .ch { color: #fff; }
 .reach-h:focus-visible { outline: 2px solid #fff; outline-offset: 10px; }
@@ -312,8 +312,7 @@ h1 { font-size: var(--t-xl); line-height: .98; letter-spacing: -0.035em; text-wr
 <li><button type="button" class="opt" data-email="vladiasem@gmail.com"><span class="opt-w">Email</span><span class="opt-v">vladiasem@gmail.com</span></button></li>
 <li><a class="opt" href="https://linkedin.com/in/vladyslav-semyonov" target="_blank" rel="noopener"><span class="opt-w">LinkedIn</span><span class="opt-v">vladyslav-semyonov ↗</span></a></li>
 </ul>
-<p class="reach-hint" id="reachHint">Click to get in touch</p>
-<button type="button" class="reach-back" id="reachBack" hidden>← Back</button>
+<p class="reach-hint" id="reachHint">Click anywhere for contacts</p>
 </div></section>
 <script>
 (function () {
@@ -394,7 +393,7 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
 <script>
 (function () {
   const h = document.getElementById('reachH'), opts = document.getElementById('reachOpts');
-  const hint = document.getElementById('reachHint'), back = document.getElementById('reachBack');
+  const hint = document.getElementById('reachHint');
   if (!h) return;
   const fin = h.closest('.finale');
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -450,10 +449,11 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
   [...head, ...optChars.flat(), ...optVals].forEach(scatter);
   head.forEach(el => { el._p = 1; });
   [...optChars.flat(), ...optVals].forEach(el => { el._p = 0; paint(el, 0); });
-  let open = false, viaKey = false;
+  let open = false, viaKey = false, gen = 0;
+  const rescatter = el => { if (el._p < 0.02 || el._p > 0.98) scatter(el); };   // never re-aim a letter in mid-flight
   const setOpen = o => {
-    if (o === open) return; open = o;
-    h.setAttribute('aria-expanded', o); hint.hidden = o; back.hidden = !o; fin.classList.toggle('is-open', o);
+    if (o === open) return; open = o; const tk = ++gen;
+    h.setAttribute('aria-expanded', o); hint.textContent = o ? 'Click anywhere to go back' : 'Click anywhere for contacts'; fin.classList.toggle('is-open', o);
     if (RM) {
       h.classList.toggle('gone', o); opts.toggleAttribute('data-off', !o);
       [...head, ...optChars.flat(), ...optVals].forEach(el => { el.style.cssText = ''; });
@@ -462,27 +462,26 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
     }
     const outs = o ? head : [...optChars.flat(), ...optVals];
     const ins = o ? optChars.flat() : head;
-    outs.forEach(scatter);
+    outs.forEach(rescatter);
     outs.forEach((el, i) => go(el, 0, i * 9, 120, 15));
     if (o) {
-      setTimeout(() => { if (open) h.classList.add('gone'); }, outs.length * 9 + 700);
+      setTimeout(() => { if (gen === tk) h.classList.add('gone'); }, outs.length * 9 + 700);
       opts.removeAttribute('data-off');
-      ins.forEach(scatter);
+      ins.forEach(rescatter);
       ins.forEach((el, i) => go(el, 1, 260 + i * 22, 150, 13));
       optVals.forEach((el, i) => go(el, 1, 620 + i * 90, 170, 18));
       if (viaKey) setTimeout(() => { if (open) opts.querySelector('.opt').focus({ preventScroll: true }); }, 400);
     } else {
       h.classList.remove('gone');
-      setTimeout(() => { if (!open) opts.setAttribute('data-off', ''); }, 900);
-      ins.forEach(scatter);
+      setTimeout(() => { if (gen === tk) opts.setAttribute('data-off', ''); }, outs.length * 9 + 700);
+      ins.forEach(rescatter);
       ins.forEach((el, i) => go(el, 1, 220 + i * 14, 150, 13));
       if (viaKey) h.focus({ preventScroll: true });
     }
   };
-  // the whole closing screen is the click target, not only the headline
-  fin.addEventListener('click', e => { if (!open && !e.target.closest('.reach-back, .reach-opts')) { viaKey = false; setOpen(true); } });
+  // the whole closing screen toggles between the headline and the contacts; a click on a contact only follows it
+  fin.addEventListener('click', e => { if (e.target.closest('.opt')) return; viaKey = false; setOpen(!open); });
   h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viaKey = true; setOpen(true); } });
-  back.addEventListener('click', e => { viaKey = e.detail === 0; setOpen(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) { viaKey = true; setOpen(false); } });
   const mail = opts.querySelector('[data-email]'), mailV = mail.querySelector('.opt-v');
   mail.addEventListener('click', () => {
