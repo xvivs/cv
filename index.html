@@ -207,7 +207,9 @@ h1 { font-size: var(--t-xl); line-height: .98; letter-spacing: -0.035em; text-wr
 /* finale: the headline is the control; its letters scatter like the stars and regroup as three contact lines */
 .finale-in { display: grid; justify-items: center; gap: 28px; }
 .reach-h, .reach-opts { grid-area: 1 / 1; align-self: center; }
-.finale { cursor: pointer; }
+/* scattered letters are moved by transforms far outside the block: clip them here, or they widen and lengthen the page
+   (visible on phones as empty margins after a pinch zoom-out) */
+.finale { cursor: pointer; overflow: hidden; overflow: clip; }
 .reach-h { border-radius: 12px; }
 .finale:not(.is-open):hover .reach-h .ch { color: #fff; }
 .reach-h:focus-visible { outline: 2px solid #fff; outline-offset: 10px; }
