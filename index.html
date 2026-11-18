@@ -195,18 +195,18 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   const rotX = (v, a) => [v[0], v[1] * Math.cos(a) - v[2] * Math.sin(a), v[1] * Math.sin(a) + v[2] * Math.cos(a)];
 
   const FINGER_DEF = [   // knuckle (x, z), bone lengths, base/tip radius, splay
-    { k: [0.108, 0.033], L: [0.046, 0.029, 0.022], r: [0.0125, 0.0098], sp: 0.04 },
-    { k: [0.112, 0.011], L: [0.051, 0.032, 0.024], r: [0.0130, 0.0102], sp: 0.0 },
-    { k: [0.106, -0.011], L: [0.047, 0.030, 0.022], r: [0.0122, 0.0096], sp: -0.04 },
-    { k: [0.096, -0.031], L: [0.037, 0.023, 0.019], r: [0.0110, 0.0088], sp: -0.10 },
+    { k: [0.104, 0.034], L: [0.046, 0.029, 0.022], r: [0.0112, 0.0085], sp: 0.07 },
+    { k: [0.108, 0.011], L: [0.051, 0.032, 0.024], r: [0.0116, 0.0088], sp: 0.0 },
+    { k: [0.102, -0.012], L: [0.047, 0.030, 0.022], r: [0.0110, 0.0083], sp: -0.07 },
+    { k: [0.092, -0.033], L: [0.037, 0.023, 0.019], r: [0.0100, 0.0076], sp: -0.15 },
   ];
   const POSES = {
     adam: { curl: [[0.20, 0.12, 0.08], [0.45, 0.35, 0.20], [0.60, 0.50, 0.30], [0.70, 0.55, 0.30]],
             thumb: [[0.70, 0.40, 0.60], [0.85, 0.35, 0.35], [0.92, 0.30, 0.20]],
-            droop: 0.30, arm: -0.20, roll: 0.55 },
+            droop: 0.30, arm: -0.20, roll: 0.9, yaw: 0.0 },
     god:  { curl: [[0.00, 0.04, 0.02], [0.25, 0.30, 0.20], [0.70, 0.80, 0.45], [0.85, 0.85, 0.45]],
             thumb: [[0.70, 0.45, 0.55], [0.85, 0.40, 0.30], [0.90, 0.35, 0.15]],
-            droop: -0.05, arm: 0.10, roll: 0.55 },
+            droop: -0.05, arm: 0.10, roll: 0.85, yaw: 0.0 },
   };
 
   // primitives: { kind, a, b, ra, rb, cap, fade } for capsules; { kind:'palm', ... } for the palm
@@ -214,7 +214,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     const prims = [];
     const W0 = V(0, 0, 0);
     // forearm (fades out toward the elbow)
-    prims.push({ kind: 'cap', a: V(-0.20, 0.004, 0), b: W0, ra: 0.038, rb: 0.032, flat: 0.8, fadeArm: true });
+    prims.push({ kind: 'cap', a: V(-0.17, 0.004, 0), b: W0, ra: 0.040, rb: 0.033, flat: 0.75, fadeArm: true });
     const hand = [];
     hand.push({ kind: 'palm', c: V(0.056, 0, 0.002), r: V(0.060, 0.019, 0.047) });
     let tip = null;
@@ -242,47 +242,56 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     return { prims: prims.concat(hand), tip: bend(tip) };
   }
 
-  function area(pr) {
-    if (pr.kind === 'palm') return 4 * Math.PI * Math.pow((Math.pow(pr.r[0] * pr.r[1], 1.6) + Math.pow(pr.r[0] * pr.r[2], 1.6) + Math.pow(pr.r[1] * pr.r[2], 1.6)) / 3, 1 / 1.6) * 1.15;
-    const L = Math.hypot(...sub(pr.b, pr.a)), r = (pr.ra + pr.rb) / 2;
-    return 2 * Math.PI * r * L * (pr.flat || 1) + (pr.tipCap ? 2 * Math.PI * pr.rb * pr.rb : 0);
+  /* Signed distance field of one hand: capsules and the palm joined with a smooth union, so the palm
+     flows into the fingers like skin instead of showing seams. Points are rejection-sampled in a thin
+     skin layer under the surface plus a faint dust halo just outside it. */
+  function smin(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; }
+  function sdCap(p, pr) {
+    let pa = sub(p, pr.a), ba = sub(pr.b, pr.a);
+    if (pr.flat) { pa = [pa[0], pa[1] / pr.flat, pa[2]]; }
+    const h = clamp(dot(pa, ba) / dot(ba, ba), 0, 1);
+    return Math.hypot(...sub(pa, mul(ba, h))) - (pr.ra + (pr.rb - pr.ra) * h);
+  }
+  function sdPalm(p, pr) {
+    const q = rotZ(sub(p, pr.c), -(pr.rot || 0)), r = pr.r;
+    const k0 = Math.hypot(q[0] / r[0], q[1] / r[1], q[2] / r[2]), k1 = Math.hypot(q[0] / (r[0] * r[0]), q[1] / (r[1] * r[1]), q[2] / (r[2] * r[2]));
+    return k0 * (k0 - 1) / (k1 || 1e-6);
+  }
+  function handSdf(prims) {
+    return p => {
+      let d = 1e9;
+      for (const pr of prims) d = smin(d, pr.kind === 'palm' ? sdPalm(p, pr) : sdCap(p, pr), pr.kind === 'palm' ? 0.02 : 0.004);
+      return d;
+    };
+  }
+  function sampleHand(prims, count) {
+    const f = handSdf(prims), lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+    for (const pr of prims) for (const c of pr.kind === 'palm' ? [add(pr.c, pr.r), sub(pr.c, pr.r)] : [pr.a, pr.b])
+      for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[k] - 0.03); hi[k] = Math.max(hi[k], c[k] + 0.03); }
+    const out = [], e = 0.0015;
+    let guard = 0;
+    while (out.length < count && guard++ < count * 400) {
+      const p = [lo[0] + Math.random() * (hi[0] - lo[0]), lo[1] + Math.random() * (hi[1] - lo[1]), lo[2] + Math.random() * (hi[2] - lo[2])];
+      if (Math.random() > smooth(-0.13, -0.005, p[0])) continue;   // forearm dissolves toward the elbow (checked first: cheap)
+      const d = f(p);
+      const skin = d < 0.0008 && d > -0.0035, halo = d >= 0.0008 && d < 0.008 && Math.random() < 0.015;
+      if (!skin && !halo) continue;
+      const n = norm([f(add(p, [e, 0, 0])) - f(sub(p, [e, 0, 0])), f(add(p, [0, e, 0])) - f(sub(p, [0, e, 0])), f(add(p, [0, 0, e])) - f(sub(p, [0, 0, e]))]);
+      out.push([p, n, halo ? 0.3 : 1 - clamp(-d / 0.0035, 0, 1) * 0.3]);
+    }
+    return out;
   }
 
-  // one surface sample -> [pos, normal, fade]
-  function sample(pr) {
-    if (pr.kind === 'palm') {
-      // superellipsoid-ish: boxier than an ellipsoid, like a palm
-      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u);
-      const n = [s * Math.cos(th), u, s * Math.sin(th)];
-      const sh = n.map(c => Math.sign(c) * Math.pow(Math.abs(c), 0.62));
-      let pt = [sh[0] * pr.r[0], sh[1] * pr.r[1], sh[2] * pr.r[2]];
-      let nn = norm([n[0] / pr.r[0], n[1] / pr.r[1], n[2] / pr.r[2]]);
-      pt = rotZ(pt, 0); return [add(pr.c, rotZ(pt, pr.rot || 0)), rotZ(nn, pr.rot || 0), 1];
-    }
-    const ax = sub(pr.b, pr.a), L = Math.hypot(...ax), d = mul(ax, 1 / L);
-    let u = norm(cross(d, Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), v = cross(d, u);
-    const capA = pr.tipCap ? 2 * Math.PI * pr.rb * pr.rb : 0, sideA = 2 * Math.PI * ((pr.ra + pr.rb) / 2) * L;
-    if (pr.tipCap && Math.random() < capA / (capA + sideA)) {
-      let n = norm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]);
-      if (dot(n, d) < 0) n = sub(n, mul(d, 2 * dot(n, d)));
-      return [add(pr.b, mul(n, pr.rb)), n, 1];
-    }
-    const t = Math.random(), th = Math.random() * Math.PI * 2, r = pr.ra + (pr.rb - pr.ra) * t;
-    const f = pr.flat || 1;
-    const n = add(mul(u, Math.cos(th)), mul(v, Math.sin(th) * f));
-    const pt = add(add(pr.a, mul(ax, t)), add(mul(u, Math.cos(th) * r), mul(v, Math.sin(th) * r * f)));
-    return [pt, norm(n), pr.fadeArm ? smooth(0.0, 0.75, t) : 1];
-  }
-
+  const HAND_SCALE = 1.3;                  // hands, not forearms, should fill the band
   // pose -> world-ish band coords: arm angle, palm roll toward the viewer, mirror for God, index tip at the meeting point
   function placeHand(P, mirror, tipX) {
     const { prims, tip } = handPrims(P);
-    const xf = v => { let w = rotX(v, -P.roll); w = rotZ(w, P.arm); if (mirror) w = [-w[0], w[1], w[2]]; return w; };
+    const xf = v => { let w = rotX(v, -P.roll); w = rotZ(w, P.arm); w = rotY(w, P.yaw || 0); if (mirror) w = [-w[0], w[1], w[2]]; return mul(w, HAND_SCALE); };
     const tipW = xf(tip), off = sub(V(tipX, 0, 0), tipW);
     return { prims, xf: v => add(xf(v), off), xn: v => xf(v), wrist: add(xf(V(0, 0, 0)), off) };
   }
 
-  const TOUCH_GAP = 0.013;
+  const TOUCH_GAP = 0.016;
   const HANDS = { '-1': placeHand(POSES.adam, false, -TOUCH_GAP), '1': placeHand(POSES.god, true, TOUCH_GAP) };
   const WRIST = { '-1': HANDS[-1].wrist, '1': HANDS[1].wrist };
   const LIGHT = norm([-0.35, -0.65, 0.7]);    // upper-left, toward the viewer (y is down)
@@ -291,24 +300,20 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   function build() {
     const small = W < 760;
-    const N = small ? 8000 : 16000;
-    // split the budget by surface area across both hands
-    const all = [];
-    for (const s of [-1, 1]) HANDS[s].prims.forEach(pr => all.push({ s, pr, A: area(pr) }));
-    let acc = 0; const cum = all.map(o => (acc += o.A));
-    const pickPrim = () => { const r = Math.random() * acc; let lo = 0, hi = cum.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < r) lo = m + 1; else hi = m; } return all[lo]; };
+    const N = small ? 13000 : 28000;
+    const S0 = { '-1': sampleHand(HANDS[-1].prims, N >> 1), '1': sampleHand(HANDS[1].prims, N - (N >> 1)) };
+    const picks = [...S0[-1].map(o => [-1, o]), ...S0[1].map(o => [1, o])];
 
     const hand = new Float32Array(N * 3), star = new Float32Array(N * 3), gal = new Float32Array(N * 3), cloud = new Float32Array(N * 3);
     const side = new Float32Array(N), seed = new Float32Array(N), lum = new Float32Array(N), born = new Float32Array(N);
     for (let i = 0; i < N; i++) {
-      const o = pickPrim(), Hd = HANDS[o.s];
-      const [p, n, fade] = sample(o.pr);
+      const [sd0, [p, n, fade]] = picks[i % picks.length], Hd = HANDS[sd0];
       const w = Hd.xf(p), nw = norm(Hd.xn(n));
       hand[i * 3] = w[0]; hand[i * 3 + 1] = w[1]; hand[i * 3 + 2] = w[2];
-      side[i] = o.s; seed[i] = Math.random();
+      side[i] = sd0; seed[i] = Math.random();
       const lambert = Math.max(0, dot(nw, LIGHT)), rim = Math.pow(1 - Math.abs(nw[2]), 2);
-      lum[i] = Math.min(1, (0.22 + 0.62 * lambert + 0.35 * rim)) * fade;
-      born[i] = 0.05 + Math.abs(w[0] - WRIST[o.s][0]) * 1.5 + Math.random() * 0.35;
+      lum[i] = Math.min(1, (0.2 + 0.6 * lambert + 0.3 * rim)) * fade;
+      born[i] = 0.05 + Math.abs(w[0] - WRIST[sd0][0]) * 1.5 + Math.random() * 0.35;
       const a = Math.random() * Math.PI * 2, r = 0.25 + Math.random() * 0.9;
       cloud[i * 3] = Math.cos(a) * r * 0.75; cloud[i * 3 + 1] = Math.sin(a) * r * 0.32; cloud[i * 3 + 2] = (Math.random() - 0.7) * 0.9;
       star[i * 3] = (Math.random() - 0.5) * 1.15; star[i * 3 + 1] = Math.random(); star[i * 3 + 2] = Math.random();
@@ -460,14 +465,14 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         vel[i3] = vx; vel[i3 + 1] = vy; vel[i3 + 2] = vz;
         // --- look: light from the fresco + a soft key light on the parts turned toward us
         const facing = clamp(0.9 + z * 3, 0.6, 1.15);
-        const handA = (0.1 + 0.85 * lum[i]) * facing * (0.25 + 0.75 * act);
+        const handA = (0.07 + 0.7 * lum[i]) * facing * (0.25 + 0.75 * act);
         const starA = sd < 0.22 ? 0.14 + dz * 0.5 : 0.0, galA = 0.18 + gal[i3 + 2] * 0.55;
         let a = handA + (starA - handA) * a1; a += (galA - a) * a2;
         const near = Math.hypot(hand[i3], hand[i3 + 1] * 1.6);
         a += Math.max(0, 1 - near / 0.05) * 0.2 * (1 - a1) * reach;
         const dl = Math.sqrt(d2); if (dl < 160) a += (1 - dl / 160) * 0.35;
         alpha[i] = a * (0.92 + 0.08 * Math.sin(t * 2 + sd * 40));
-        let sz = 1.05 + lum[i] * 0.45; sz += ((0.9 + dz * 1.6) - sz) * a1; sz += ((1.0 + gal[i3 + 2] * 1.8) - sz) * a2;
+        let sz = 0.95 + lum[i] * 0.4; sz += ((0.9 + dz * 1.6) - sz) * a1; sz += ((1.0 + gal[i3 + 2] * 1.8) - sz) * a2;
         size[i] = sz;
       }
       posAttr.needsUpdate = true; aAttr.needsUpdate = true; sAttr.needsUpdate = true;
