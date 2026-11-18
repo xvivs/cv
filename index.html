@@ -216,26 +216,26 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   function handPrims(P) {
     const W0 = V(0, 0, 0);
     // forearm: flat oval, wider toward the elbow, narrow wrist (fades out toward the elbow)
-    const prims = [{ kind: 'cap', a: V(-0.17, 0.004, 0), b: V(-0.005, 0.002, 0), ra: 0.036, rb: 0.025, flat: 0.62, k: 0.02 }];
+    const prims = [{ kind: 'cap', a: V(-0.17, 0.004, 0), b: V(-0.005, 0.002, 0), ra: 0.038, rb: 0.029, flat: 0.68, k: 0.022 }];
     const hand = [];
     // palm body: a flat plate plus the thenar (thumb) and hypothenar (little finger) mounds
-    hand.push({ kind: 'ell', c: V(0.058, 0.001, 0.001), r: V(0.044, 0.011, 0.036), k: 0.018 });
-    hand.push({ kind: 'ell', c: V(0.034, 0.008, 0.026), r: V(0.030, 0.015, 0.016), k: 0.016 });
-    hand.push({ kind: 'ell', c: V(0.050, 0.006, -0.026), r: V(0.036, 0.011, 0.011), k: 0.016 });
+    hand.push({ kind: 'ell', c: V(0.058, 0.001, 0.001), r: V(0.050, 0.014, 0.040), k: 0.022 });
+    hand.push({ kind: 'ell', c: V(0.034, 0.008, 0.026), r: V(0.030, 0.014, 0.016), k: 0.02 });
+    hand.push({ kind: 'ell', c: V(0.050, 0.006, -0.026), r: V(0.036, 0.010, 0.011), k: 0.02 });
     let tip = null;
     FINGER_DEF.forEach((F, i) => {
       const kn = V(F.k[0], -0.002, F.k[1]);
       // metacarpal: wrist -> knuckle, with a knuckle bump on the back of the hand
-      hand.push({ kind: 'cap', a: V(0.012, 0.0, F.b), b: kn, ra: 0.0105, rb: F.r * 1.12, flat: 0.72, k: 0.016 });
-      hand.push({ kind: 'ell', c: add(kn, V(0, -0.003, 0)), r: V(F.r * 1.1, F.r * 0.95, F.r * 1.05), k: 0.008 });
+      hand.push({ kind: 'cap', a: V(0.012, 0.0, F.b), b: kn, ra: 0.0110, rb: F.r * 1.1, flat: 0.75, k: 0.02 });
+      hand.push({ kind: 'ell', c: add(kn, V(0, -0.003, 0)), r: V(F.r * 1.05, F.r * 0.9, F.r * 1.02), k: 0.012 });
       let p = kn, c = 0;
-      const rs = [F.r, F.r * 0.9, F.r * 0.82, F.r * 0.74];
+      const rs = [F.r * 1.08, F.r * 0.98, F.r * 0.9, F.r * 0.8];
       F.L.forEach((len, j) => {
         c += P.curl[i][j];
         const d = rotY(rotZ(V(1, 0, 0), c), F.sp);
         const q = add(p, mul(d, len));
-        hand.push({ kind: 'cap', a: p, b: q, ra: rs[j], rb: rs[j + 1], flat: 0.86, k: j ? 0.004 : 0.008 });
-        if (j < 2) hand.push({ kind: 'ell', c: q, r: V(rs[j + 1] * 1.1, rs[j + 1] * 1.02, rs[j + 1] * 1.1), k: 0.004 });   // joint
+        hand.push({ kind: 'cap', a: p, b: q, ra: rs[j], rb: rs[j + 1], flat: 0.9, k: j ? 0.006 : 0.012 });
+        if (j < 2) hand.push({ kind: 'ell', c: q, r: V(rs[j + 1] * 1.04, rs[j + 1], rs[j + 1] * 1.04), k: 0.006 });   // joint
         else hand.push({ kind: 'ell', c: add(q, mul(d, -rs[3] * 0.4)), r: V(rs[3] * 1.15, rs[3] * 0.95, rs[3] * 1.05), k: 0.004 });   // fingertip pad
         p = q;
       });
@@ -293,6 +293,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     const areas = prims.map(pr => pr.kind === 'cap'
       ? 2 * Math.PI * (pr.ra + pr.rb) / 2 * (Math.hypot(...sub(pr.b, pr.a)) + pr.ra + pr.rb) * (1 + (pr.flat || 1)) / 2
       : 4 * Math.PI * Math.pow((Math.pow(pr.r[0] * pr.r[1], 1.6) + Math.pow(pr.r[0] * pr.r[2], 1.6) + Math.pow(pr.r[1] * pr.r[2], 1.6)) / 3, 1 / 1.6));
+    areas[0] *= 0.45;                        // forearm proposals are never rejected by overlaps, so they would crowd the palm out
     let acc = 0; const cum = areas.map(x => (acc += x));
     const pick = () => { const r = Math.random() * acc; let lo = 0, hi = cum.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < r) lo = m + 1; else hi = m; } return prims[lo]; };
     const out = [], e = 0.0012;
@@ -308,8 +309,8 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         p = add(add(pr.a, mul(ax, t)), add(mul(uu, Math.cos(th) * r), mul(vv, Math.sin(th) * r)));
         if (pr.flat) p[1] = pr.a[1] + (p[1] - pr.a[1]) * pr.flat;
       } else {
-        const n = [s0 * Math.cos(th), u0, s0 * Math.sin(th)], k = 1 + off / Math.max(pr.r[1], 0.008);
-        p = add(pr.c, rotZ([n[0] * pr.r[0] * k, n[1] * pr.r[1] * k, n[2] * pr.r[2] * k], pr.rot || 0));
+        const n = [s0 * Math.cos(th), u0, s0 * Math.sin(th)], nn = norm([n[0] / pr.r[0], n[1] / pr.r[1], n[2] / pr.r[2]]);
+        p = add(pr.c, rotZ(add([n[0] * pr.r[0], n[1] * pr.r[1], n[2] * pr.r[2]], mul(nn, off)), pr.rot || 0));
       }
       if (Math.random() > smooth(-0.13, -0.005, p[0])) continue;   // forearm dissolves toward the elbow
       const d = f(p);
@@ -352,7 +353,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
       hand[i * 3] = w[0]; hand[i * 3 + 1] = w[1]; hand[i * 3 + 2] = w[2];
       side[i] = sd0; seed[i] = Math.random();
       const lambert = Math.max(0, dot(nw, LIGHT)), rim = Math.pow(1 - Math.abs(nw[2]), 2);
-      lum[i] = Math.min(1, (0.2 + 0.6 * lambert + 0.3 * rim)) * fade;
+      lum[i] = Math.min(1, (0.32 + 0.55 * lambert + 0.3 * rim)) * fade;
       born[i] = 0.05 + Math.abs(w[0] - WRIST[sd0][0]) * 1.5 + Math.random() * 0.35;
       const a = Math.random() * Math.PI * 2, r = 0.25 + Math.random() * 0.9;
       cloud[i * 3] = Math.cos(a) * r * 0.75; cloud[i * 3 + 1] = Math.sin(a) * r * 0.32; cloud[i * 3 + 2] = (Math.random() - 0.7) * 0.9;
