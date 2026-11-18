@@ -204,8 +204,9 @@ h1 { font-size: var(--t-xl); line-height: .98; letter-spacing: -0.035em; text-wr
 /* finale: the headline is the control; its letters scatter like the stars and regroup as three contact lines */
 .finale-in { display: grid; justify-items: center; gap: 28px; }
 .reach-h, .reach-opts { grid-area: 1 / 1; align-self: center; }
-.reach-h { cursor: pointer; border-radius: 12px; }
-.reach-h:hover .ch { color: #fff; }
+.finale:not(.is-open) { cursor: pointer; }
+.reach-h { border-radius: 12px; }
+.finale:not(.is-open):hover .reach-h .ch { color: #fff; }
 .reach-h:focus-visible { outline: 2px solid #fff; outline-offset: 10px; }
 .reach-h.gone { visibility: hidden; pointer-events: none; }
 .w { display: inline-block; white-space: nowrap; }
@@ -395,6 +396,7 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
   const h = document.getElementById('reachH'), opts = document.getElementById('reachOpts');
   const hint = document.getElementById('reachHint'), back = document.getElementById('reachBack');
   if (!h) return;
+  const fin = h.closest('.finale');
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // split text into word-wrapped letters so each one can move on its own
   const split = root => {
@@ -451,7 +453,7 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
   let open = false;
   const setOpen = o => {
     if (o === open) return; open = o;
-    h.setAttribute('aria-expanded', o); hint.hidden = o; back.hidden = !o;
+    h.setAttribute('aria-expanded', o); hint.hidden = o; back.hidden = !o; fin.classList.toggle('is-open', o);
     if (RM) {
       h.classList.toggle('gone', o); opts.toggleAttribute('data-off', !o);
       [...head, ...optChars.flat(), ...optVals].forEach(el => { el.style.cssText = ''; });
@@ -477,7 +479,8 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
       h.focus({ preventScroll: true });
     }
   };
-  h.addEventListener('click', () => setOpen(true));
+  // the whole closing screen is the click target, not only the headline
+  fin.addEventListener('click', e => { if (!open && !e.target.closest('.reach-back, .reach-opts')) setOpen(true); });
   h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } });
   back.addEventListener('click', () => setOpen(false));
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) setOpen(false); });
