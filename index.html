@@ -131,7 +131,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>/* Background scene (three.js): the hands from "The Creation of Adam" (public domain) as ~30k points.
    - Load: points stream in from a loose cloud and settle into the two hands; the hands drift together
-     until the fingertips almost touch and a soft blue light breathes between them.
+     until the fingertips almost touch, then breathe.
    - Scroll: the hands drift apart and dissolve into a star field that moves with parallax.
    - Bottom: the stars gather into a slowly turning galaxy around the closing line.
    Every point is a damped spring toward its target, so the cursor push and the click wave feel physical. */
@@ -177,14 +177,6 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   const SPLIT = 0.008, BAND_ASPECT = 272 / 532, SPLIT_Y = -0.05 * BAND_ASPECT;   // gap between the fingertips
   const MW = 532, MH = 272;
-  // finger capsules in mask px (root -> tip), same list as hands/fingers.py
-  const FINGERS = [[186, 88, 266, 136], [192, 110, 242, 163], [182, 122, 216, 165], [160, 128, 178, 168],
-                   [360, 104, 276, 120], [398, 128, 338, 150], [368, 150, 360, 218], [406, 160, 402, 214]]
-    .map(([ax, ay, bx, by], i) => {
-      const rx = ax / MW - 0.5, ry = (ay / MH - 0.5) * BAND_ASPECT, tx = bx / MW - 0.5, ty = (by / MH - 0.5) * BAND_ASPECT;
-      const L = Math.hypot(tx - rx, ty - ry);
-      return { rx, ry, dx: (tx - rx) / L, dy: (ty - ry) / L, w1: 0.8 + Math.random() * 0.6, w2: 1.3 + Math.random() * 0.9, p1: Math.random() * 6.3, p2: Math.random() * 6.3, adam: i < 4 };
-    });
   // wrists: each hand turns around its own wrist
   const WRIST = { '-1': [-0.5, (75 / MH - 0.5) * BAND_ASPECT], '1': [0.5, (95 / MH - 0.5) * BAND_ASPECT] };
 
@@ -214,17 +206,15 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     const pick = r => { let lo = 0, hi = cdf.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (cdf[m] < r) lo = m + 1; else hi = m; } return lo; };
 
     const small = W < 760;
-    const N = small ? 7000 : 14000;
+    const N = small ? 8000 : 16000;
     const hand = new Float32Array(N * 3), star = new Float32Array(N * 3), gal = new Float32Array(N * 3), cloud = new Float32Array(N * 3);
     const side = new Float32Array(N), seed = new Float32Array(N), lum = new Float32Array(N), born = new Float32Array(N);
-    const fid = new Int8Array(N), ft = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const k = pick(Math.random() * acc), x = k % w, y = (k / w) | 0;
       const hx = (x + Math.random()) / w - 0.5, hy = ((y + Math.random()) / h - 0.5) * BAND_ASPECT;
       const l = px[k * 4] / 255, bulge = Math.sqrt(Math.min(1, dist[k] / 16));
       hand[i * 3] = hx; hand[i * 3 + 1] = hy; hand[i * 3 + 2] = bulge * 0.04 + (l - 0.5) * 0.012;   // volume: rounded + lit parts forward
       side[i] = hx < SPLIT ? -1 : 1; lum[i] = l; seed[i] = Math.random();
-      fid[i] = Math.round(px[k * 4 + 1] / 28) - 1; ft[i] = px[k * 4 + 2] / 255;
       // hands grow from the wrist out to the fingertips
       born[i] = 0.05 + Math.abs(hx - WRIST[side[i]][0]) * 1.7 + Math.random() * 0.35;
       // starting cloud: a deep 3D volume around the hands
@@ -239,9 +229,9 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     }
 
     const pos = new Float32Array(N * 3), vel = new Float32Array(N * 3), alpha = new Float32Array(N), size = new Float32Array(N);
-    const band0 = small ? W * 0.98 : Math.min(W * 0.62, 980);
+    const band0 = small ? W * 1.2 : Math.min(W * 0.8, 1300);
     for (let i = 0; i < N; i++) {
-      pos[i * 3] = W * 0.5 + cloud[i * 3] * band0; pos[i * 3 + 1] = H * (small ? 0.2 : 0.155) + cloud[i * 3 + 1] * band0; pos[i * 3 + 2] = cloud[i * 3 + 2] * band0;
+      pos[i * 3] = W * 0.5 + cloud[i * 3] * band0; pos[i * 3 + 1] = H * 0.2 + cloud[i * 3 + 1] * band0; pos[i * 3 + 2] = cloud[i * 3 + 2] * band0;
     }
 
     const geo = new T.BufferGeometry();
@@ -272,15 +262,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     points.frustumCulled = false;
     world.add(points);
 
-    const gc = document.createElement('canvas'); gc.width = gc.height = 128;
-    const g2 = gc.getContext('2d'); const gr = g2.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gr.addColorStop(0, 'rgba(190,210,255,1)'); gr.addColorStop(0.18, 'rgba(110,150,255,.55)');
-    gr.addColorStop(0.5, 'rgba(60,95,220,.16)'); gr.addColorStop(1, 'rgba(40,70,200,0)');
-    g2.fillStyle = gr; g2.fillRect(0, 0, 128, 128);
-    const orb = new T.Sprite(new T.SpriteMaterial({ map: new T.CanvasTexture(gc), blending: T.AdditiveBlending, transparent: true, depthWrite: false }));
-    world.add(orb);
-
-    run(N, { hand, star, gal, cloud, side, seed, lum, born, fid, ft, pos, vel, alpha, size, geo, mat, orb });
+    run(N, { hand, star, gal, cloud, side, seed, lum, born, pos, vel, alpha, size, geo, mat });
   }
 
   /* ---------- input ---------- */
@@ -310,13 +292,12 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
       if (!inside) { mx = tmx; my = tmy; }
 
       const sY = scrollY, small = W < 760, us = unitScale();
-      const band = small ? W * 0.98 : Math.min(W * 0.62, 980);
-      const handCY = (small ? H * 0.2 : H * 0.155) - sY * 0.3;      // hands rise slower than the page
+      const band = small ? W * 1.2 : Math.min(W * 0.8, 1300);
+      const handCY = H * 0.2 - sY * 0.3;      // hands rise slower than the page
       // cinematic intro: hands turn in from the dark (0.1–3.1s), reach (0.9–3.6s), touch, then breathe
       const pose = easeIO(clamp((t - 0.1) / 3.0, 0, 1)), rest = 1 - pose;
       const reach = easeIO(clamp((t - 0.9) / 2.7, 0, 1));
       const gap = 0.16 * (1 - reach) + 0.006 * (0.5 + 0.5 * Math.sin(t * 1.15));
-      const flare = Math.exp(-((t - 3.6) ** 2) / 0.25);
       const toStars = smooth(H * 0.18, H * 1.1, sY);
       let toGal = 0;
       if (finale) { const r = finale.getBoundingClientRect(); toGal = clamp(1 - r.top / H, 0, 1); }
@@ -324,7 +305,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
       const R = Math.min(W, H);
       const live = waves.filter(w => now - w.t < 1600); waves.length = 0; waves.push(...live);
 
-      const { hand, star, gal, cloud, side, seed, lum, born, fid, ft, pos, vel, alpha, size } = S;
+      const { hand, star, gal, cloud, side, seed, lum, born, pos, vel, alpha, size } = S;
       const floatY = Math.sin(t * 0.55) * 6, floatX = Math.cos(t * 0.4) * 4;
       const tiltX = inside ? (mx / W - 0.5) : 0, tiltY = inside ? (my / H - 0.5) : 0;
       const ang = t * 0.035, ca = Math.cos(ang), sa = Math.sin(ang);
@@ -338,26 +319,9 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         HP[sd] = { cy: Math.cos(yaw), sy: Math.sin(yaw), cp: Math.cos(pitch), sp: Math.sin(pitch),
                    ox: sd * 0.2 * rest, oy: 0.05 * rest, oz: -0.35 * rest + 0.012 * Math.sin(t * 0.8 + sd) };
       }
-      // per-finger motion: unfurl during the reach, then each finger drifts on its own rhythm
-      const FA = FINGERS.map(f => {
-        const a = (0.045 * Math.sin(t * f.w1 * 0.7 + f.p1) + 0.02 * Math.sin(t * f.w2 + f.p2)) * pose;
-        const b = 0.95 * (1 - reach) + (0.16 * Math.sin(t * f.w1 * 0.55 + f.p2) + 0.06 * Math.sin(t * f.w2 * 0.8 + f.p1)) * pose;
-        return { ca: Math.cos(a), sa: Math.sin(a), cb: Math.cos(b), sb: Math.sin(b) };
-      });
-
       for (let i = 0; i < N; i++) {
         const i3 = i * 3, sd = seed[i], s = side[i];
         let x = hand[i3], y = hand[i3 + 1], z = hand[i3 + 2];
-        // --- finger bend around its root (in-plane swing + curl toward the viewer)
-        const f = fid[i];
-        if (f >= 0) {
-          const F = FINGERS[f], A = FA[f], wgt = smooth(0, 0.35, ft[i]);
-          let rx = x - F.rx, ry = y - F.ry;
-          const ca2 = 1 + (A.ca - 1) * wgt, sa2 = A.sa * wgt;
-          const qx = rx * ca2 - ry * sa2, qy = rx * sa2 + ry * ca2;
-          const along = qx * F.dx + qy * F.dy, cb = 1 + (A.cb - 1) * wgt, sb = A.sb * wgt;
-          x = F.rx + qx - F.dx * along * (1 - cb); y = F.ry + qy - F.dy * along * (1 - cb); z += along * sb;
-        }
         // --- hand pose around the wrist
         const P = HP[s], wr = WRIST[s];
         let lx = x - wr[0], ly = y - wr[1];
@@ -408,7 +372,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         const starA = sd < 0.22 ? 0.14 + dz * 0.5 : 0.0, galA = 0.18 + gal[i3 + 2] * 0.55;
         let a = handA + (starA - handA) * a1; a += (galA - a) * a2;
         const near = Math.hypot(hand[i3] - SPLIT, (hand[i3 + 1] - SPLIT_Y) * 1.6);
-        a += Math.max(0, 1 - near / 0.05) * (0.5 + flare * 0.8) * (1 - a1) * reach;
+        a += Math.max(0, 1 - near / 0.05) * 0.25 * (1 - a1) * reach;
         const dl = Math.sqrt(d2); if (dl < 160) a += (1 - dl / 160) * 0.35;
         alpha[i] = a * (0.92 + 0.08 * Math.sin(t * 2 + sd * 40));
         let sz = 1.3 + lum[i] * 0.9; sz += ((0.9 + dz * 1.6) - sz) * a1; sz += ((1.0 + gal[i3 + 2] * 1.8) - sz) * a2;
@@ -417,13 +381,6 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
       posAttr.needsUpdate = true; aAttr.needsUpdate = true; sAttr.needsUpdate = true;
 
       points_transform(us);   // positions are screen px; map them into world units
-
-      // blue light between the fingertips
-      const touch = (clamp(1 - gap / 0.02, 0, 1) + flare * 0.7) * (1 - toStars);
-      const ox = W * 0.5 + SPLIT * band + floatX, oy = handCY + SPLIT_Y * band + floatY;
-      S.orb.position.set((ox - W / 2) * us, -(oy - H / 2) * us, 5);
-      const os = (110 + 22 * Math.sin(t * 3.1)) * us * (small ? 0.7 : 1);
-      S.orb.scale.set(os, os, 1); S.orb.material.opacity = 0.85 * touch;
 
       // dim stars over the text column while reading
       const col = sheet.getBoundingClientRect(), dpr = renderer.getPixelRatio();
