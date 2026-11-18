@@ -159,7 +159,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   let px = -9999, py = -9999, inside = false, smx = 0, smy = 0, vx = 0, lastX = 0;
   addEventListener('pointermove', e => {
-    px = e.clientX; py = e.clientY; inside = true; vx += (e.clientX - lastX) * 0.0006; lastX = e.clientX;
+    px = e.clientX; py = e.clientY; inside = true; vx += (e.clientX - lastX) * 0.00012; lastX = e.clientX;
   }, { passive: true });
   let lastScroll = scrollY;
   document.addEventListener('pointerleave', () => { inside = false; px = py = -9999; });
@@ -175,18 +175,18 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     const phone = W < 760, wide = W >= 1280;
     if (!(phone && now - scrolling < 200)) morphT += dt;   // freeze the morph while scrolling on phones
     const s = morphT * 0.001;
-    smx += ((inside ? px / W - .5 : 0) - smx) * 0.05;
-    smy += ((inside ? py / H - .5 : 0) - smy) * 0.05;
+    smx += ((inside ? px / W - .5 : 0) - smx) * 0.025;
+    smy += ((inside ? py / H - .5 : 0) - smy) * 0.025;
     const sY = scrollY;
     vx += (sY - lastScroll) * 0.00025; lastScroll = sY;          // scrolling also spins the cloud
     vx *= 0.94; spin += 0.0018 + vx;
     let m = (Math.sin(s * 0.35) + 1) / 2; m = m * m * (3 - 2 * m);
-    const ay = spin + smx * 1.4, ax = 0.45 + Math.sin(s * 0.13) * 0.25 + smy * 1.0;
+    const ay = spin + Math.sin(s * 0.11) * 0.7 + smx * 0.45, ax = 0.45 + Math.sin(s * 0.13) * 0.5 + smy * 0.3;
     const cy = Math.cos(ay), sy = Math.sin(ay), cx = Math.cos(ax), sx = Math.sin(ax);
-    const scale = phone ? W * 0.38 : Math.min(W, H) * (wide ? 0.36 : 0.40);
-    const cxp = (phone ? W * 0.5 : wide ? W * 0.80 : W * 0.66) + smx * 40;
+    const scale = phone ? W * 0.5 : Math.min(W, H) * (wide ? 0.5 : 0.52);
+    const cxp = (phone ? W * 0.5 : wide ? W * 0.78 : W * 0.66) + Math.sin(s * 0.21) * W * 0.06 + smx * 18;
     const lift = Math.min(sY * 0.12, H * 0.18);                    // cloud drifts up slower than the page
-    const cyp = (phone ? H * 0.28 : H * 0.5) + smy * 30 - lift, f = 2.6;
+    const cyp = (phone ? H * 0.3 : H * 0.5) + Math.cos(s * 0.17) * H * 0.08 + smy * 14 - lift, f = 2.6;
     const live = waves.filter(w => now - w.t < 1400);
     waves.length = 0; waves.push(...live);
 
@@ -198,7 +198,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
       const bx = cxp + x1 * k * scale, by = cyp + y1 * k * scale;
       let tx = 0, ty = 0;
       const dx = bx - px, dy = by - py, d = Math.hypot(dx, dy);
-      if (d < PUSH && d > 0.1) { const q = (1 - d / PUSH) ** 2 * 40 * (0.6 + (1 - z2) * 0.4); tx += dx / d * q; ty += dy / d * q; }
+      if (d < PUSH && d > 0.1) { const q = (1 - d / PUSH) ** 2 * 26 * (0.6 + (1 - z2) * 0.4); tx += dx / d * q; ty += dy / d * q; }
       for (const w of live) {
         const age = (now - w.t) / 1000, rad = age * 520, wx = bx - w.x, wy = by - w.y, wd = Math.hypot(wx, wy) || 1;
         const band = Math.exp(-((wd - rad) ** 2) / 1800) * (1 - age / 1.4) * 24;
